@@ -1,0 +1,71 @@
+# Dart
+.dart_tool/
+*.dart_tool
+.packages
+.pub-cache/
+.pub/
+/build/
+build/
+
+# Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android
+android/app/src/main/assets/flutter_assets/
+android/.gradle/
+android/local.properties
+android/key.properties
+android/keystore.properties
+android/app/release/
+android/app/outputs/
+*.apk
+*.aab
+
+# Signing keys and provisioning profiles
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*.mobileprovision
+**/key.properties
+**/keystore.properties
+
+# iOS
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/ephemeral/
+ios/Pods/
+ios/Podfile.lock
+ios/.symlinks/
+
+# macOS generated local environment
+macos/Flutter/ephemeral/
+
+# IntelliJ / VS Code
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.*
+*.secrets
+secrets.properties
+credentials.json
+service-account*.json
+google-services.json
+GoogleService-Info.plist
