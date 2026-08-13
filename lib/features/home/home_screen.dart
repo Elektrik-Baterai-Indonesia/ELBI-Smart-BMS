@@ -198,9 +198,4 @@ class _MenuItem {
   }
 }
 
-enum _MenuAction {
-  scanDevice,
-  monitorDevice,
-  userManual,
-  appSettings,
-}
+enum _MenuAction { scanDevice, monitorDevice, userManual, appSettings }

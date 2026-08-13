@@ -69,6 +69,19 @@ void main() {
     expect(dischargeDelay.toProtocolValue(2), 2000);
   });
 
+  test('voltage settings display volts but retain BLE millivolts', () {
+    final voltageDefinitions = bmsSettingDefinitions.where(
+      (definition) => definition.unit == 'V',
+    );
+
+    expect(voltageDefinitions, hasLength(6));
+    for (final definition in voltageDefinitions) {
+      expect(definition.decimalPlaces, 3);
+      expect(definition.toDisplayValue(3650), 3.65);
+      expect(definition.toProtocolValue(3.65), 3650);
+    }
+  });
+
   test('battery chemistry presets apply supplied values only', () {
     final original = BmsSettings.defaults();
     final lfp = original.applyBatteryTypePreset(BmsBatteryType.lfp);
@@ -76,12 +89,13 @@ void main() {
     final lto = original.applyBatteryTypePreset(BmsBatteryType.lto);
 
     expect(lfp.valueFor(BmsSettingKey.overVoltageProtection), 3650);
-    expect(lfp.valueFor(BmsSettingKey.underVoltageProtection), 2500);
-    expect(lfp.valueFor(BmsSettingKey.overTemperatureBattery), 55);
+    expect(lfp.valueFor(BmsSettingKey.underVoltageProtection), 2800);
+    expect(lfp.valueFor(BmsSettingKey.underVoltageRelease), 3000);
+    expect(lfp.valueFor(BmsSettingKey.overTemperatureBattery), 47);
     expect(lfp.valueFor(BmsSettingKey.balancingMinimum), 3400);
     expect(lfp.matchingBatteryType, BmsBatteryType.lfp);
 
-    expect(nmc.valueFor(BmsSettingKey.overVoltageProtection), 4200);
+    expect(nmc.valueFor(BmsSettingKey.overVoltageProtection), 4199);
     expect(nmc.valueFor(BmsSettingKey.balancingMinimum), 4000);
     expect(nmc.matchingBatteryType, BmsBatteryType.nmc);
 
@@ -96,6 +110,44 @@ void main() {
       expect(settings.valueFor(BmsSettingKey.batteryCapacity), 100);
       expect(settings.valueFor(BmsSettingKey.resistorShunt), 1.5);
     }
+  });
+
+  test('battery protection limits use strict chemistry boundaries', () {
+    final expectedRanges = {
+      BmsBatteryType.lfp: {
+        BmsSettingKey.underVoltageProtection: (2500.0, 3000.0),
+        BmsSettingKey.overVoltageProtection: (3300.0, 3700.0),
+      },
+      BmsBatteryType.nmc: {
+        BmsSettingKey.underVoltageProtection: (2500.0, 3000.0),
+        BmsSettingKey.overVoltageProtection: (3800.0, 4200.0),
+      },
+      BmsBatteryType.lto: {
+        BmsSettingKey.underVoltageProtection: (1500.0, 2000.0),
+        BmsSettingKey.overVoltageProtection: (2400.0, 2800.0),
+      },
+    };
+
+    for (final batteryEntry in expectedRanges.entries) {
+      for (final rangeEntry in batteryEntry.value.entries) {
+        final limit = bmsSettingValueLimitFor(
+          rangeEntry.key,
+          batteryEntry.key,
+        )!;
+        final (minimum, maximum) = rangeEntry.value;
+        expect(limit.allows(minimum), isFalse);
+        expect(limit.allows(minimum + 1), isTrue);
+        expect(limit.allows(maximum - 1), isTrue);
+        expect(limit.allows(maximum), isFalse);
+      }
+    }
+
+    final temperatureLimit = bmsSettingValueLimitFor(
+      BmsSettingKey.overTemperatureBattery,
+      null,
+    )!;
+    expect(temperatureLimit.allows(59.9), isTrue);
+    expect(temperatureLimit.allows(60), isFalse);
   });
 
   test('BMS settings map from the Bluetooth telemetry JSON format', () {

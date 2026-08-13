@@ -66,7 +66,7 @@ void main() {
     expect(telemetry.settings!.valueFor(BmsSettingKey.resistorShunt), 1.5);
   });
 
-  test('cell monitoring follows a variable payload length', () {
+  test('cell monitoring excludes voltages below 500 mV', () {
     const variableCellPayload = '''
     {
       "serial_number": "00BB1000",
@@ -75,16 +75,16 @@ void main() {
       "current": 2.5,
       "temperature": 25.0,
       "error_code": 0,
-      "cell_voltage": [3300, 0, 3290, 3280, 0, 0]
+      "cell_voltage": [3300, 499, 500, 3290, 3280, 0]
     }
     ''';
 
     final telemetry = BmsTelemetry.tryParse(variableCellPayload)!;
 
     expect(telemetry.cellVoltageMillivolts, hasLength(6));
-    expect(telemetry.monitoringCellVoltageMillivolts, [3300, 0, 3290, 3280]);
+    expect(telemetry.monitoringCellVoltageMillivolts, [3300, 500, 3290, 3280]);
     expect(telemetry.monitoringCellCount, 4);
-    expect(telemetry.activeCellCount, 3);
+    expect(telemetry.activeCellCount, 4);
   });
 
   test('continues to accept telemetry without device settings', () {

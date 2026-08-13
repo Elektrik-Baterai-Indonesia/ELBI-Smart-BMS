@@ -38,11 +38,11 @@ enum BmsBatteryType {
     BmsBatteryType.lfp => const {
       BmsSettingKey.overVoltageProtection: 3650,
       BmsSettingKey.overVoltageRelease: 3450,
-      BmsSettingKey.underVoltageProtection: 2500,
-      BmsSettingKey.underVoltageRelease: 2800,
+      BmsSettingKey.underVoltageProtection: 2800,
+      BmsSettingKey.underVoltageRelease: 3000,
       BmsSettingKey.delayOverCurrentCharge: 1000,
       BmsSettingKey.delayOverCurrentDischarge: 2000,
-      BmsSettingKey.overTemperatureBattery: 55,
+      BmsSettingKey.overTemperatureBattery: 47,
       BmsSettingKey.overTemperatureBatteryRelease: 45,
       BmsSettingKey.overTemperatureMosfet: 85,
       BmsSettingKey.overTemperatureMosfetRelease: 70,
@@ -51,7 +51,7 @@ enum BmsBatteryType {
       BmsSettingKey.dayToSleep: 7,
     },
     BmsBatteryType.nmc => const {
-      BmsSettingKey.overVoltageProtection: 4200,
+      BmsSettingKey.overVoltageProtection: 4199,
       BmsSettingKey.overVoltageRelease: 4100,
       BmsSettingKey.underVoltageProtection: 2800,
       BmsSettingKey.underVoltageRelease: 3000,
@@ -81,6 +81,62 @@ enum BmsBatteryType {
       BmsSettingKey.dayToSleep: 7,
     },
   };
+}
+
+class BmsSettingValueLimit {
+  const BmsSettingValueLimit({this.minimumExclusive, this.maximumExclusive});
+
+  final double? minimumExclusive;
+  final double? maximumExclusive;
+
+  bool allows(double value) {
+    final minimum = minimumExclusive;
+    final maximum = maximumExclusive;
+    return (minimum == null || value > minimum) &&
+        (maximum == null || value < maximum);
+  }
+}
+
+BmsSettingValueLimit? bmsSettingValueLimitFor(
+  BmsSettingKey key,
+  BmsBatteryType? batteryType,
+) {
+  if (key == BmsSettingKey.overTemperatureBattery) {
+    return const BmsSettingValueLimit(maximumExclusive: 60);
+  }
+  if (batteryType == null) return null;
+
+  if (key == BmsSettingKey.underVoltageProtection) {
+    return switch (batteryType) {
+      BmsBatteryType.lfp || BmsBatteryType.nmc => const BmsSettingValueLimit(
+        minimumExclusive: 2500,
+        maximumExclusive: 3000,
+      ),
+      BmsBatteryType.lto => const BmsSettingValueLimit(
+        minimumExclusive: 1500,
+        maximumExclusive: 2000,
+      ),
+    };
+  }
+
+  if (key == BmsSettingKey.overVoltageProtection) {
+    return switch (batteryType) {
+      BmsBatteryType.lfp => const BmsSettingValueLimit(
+        minimumExclusive: 3300,
+        maximumExclusive: 3700,
+      ),
+      BmsBatteryType.nmc => const BmsSettingValueLimit(
+        minimumExclusive: 3800,
+        maximumExclusive: 4200,
+      ),
+      BmsBatteryType.lto => const BmsSettingValueLimit(
+        minimumExclusive: 2400,
+        maximumExclusive: 2800,
+      ),
+    };
+  }
+
+  return null;
 }
 
 class BmsSettingDefinition {
@@ -116,29 +172,37 @@ const bmsSettingDefinitions = [
     key: BmsSettingKey.overVoltageProtection,
     section: BmsSettingsSection.voltageProtection,
     label: 'Over Voltage Protection',
-    unit: 'mV',
+    unit: 'V',
     defaultValue: 4200,
+    decimalPlaces: 3,
+    protocolUnitsPerDisplayUnit: 1000,
   ),
   BmsSettingDefinition(
     key: BmsSettingKey.overVoltageRelease,
     section: BmsSettingsSection.voltageProtection,
     label: 'Over Voltage Protection\nRelease',
-    unit: 'mV',
+    unit: 'V',
     defaultValue: 4100,
+    decimalPlaces: 3,
+    protocolUnitsPerDisplayUnit: 1000,
   ),
   BmsSettingDefinition(
     key: BmsSettingKey.underVoltageProtection,
     section: BmsSettingsSection.voltageProtection,
     label: 'Under Voltage Protection',
-    unit: 'mV',
+    unit: 'V',
     defaultValue: 2800,
+    decimalPlaces: 3,
+    protocolUnitsPerDisplayUnit: 1000,
   ),
   BmsSettingDefinition(
     key: BmsSettingKey.underVoltageRelease,
     section: BmsSettingsSection.voltageProtection,
     label: 'Under Voltage Protection\nRelease',
-    unit: 'mV',
+    unit: 'V',
     defaultValue: 3000,
+    decimalPlaces: 3,
+    protocolUnitsPerDisplayUnit: 1000,
   ),
   BmsSettingDefinition(
     key: BmsSettingKey.overCurrentCharge,
@@ -217,15 +281,19 @@ const bmsSettingDefinitions = [
     key: BmsSettingKey.balancingMinimum,
     section: BmsSettingsSection.systemAndBalancing,
     label: 'Balancing Minimum',
-    unit: 'mV',
+    unit: 'V',
     defaultValue: 3500,
+    decimalPlaces: 3,
+    protocolUnitsPerDisplayUnit: 1000,
   ),
   BmsSettingDefinition(
     key: BmsSettingKey.balancingDifferent,
     section: BmsSettingsSection.systemAndBalancing,
     label: 'Balancing Different',
-    unit: 'mV',
+    unit: 'V',
     defaultValue: 50,
+    decimalPlaces: 3,
+    protocolUnitsPerDisplayUnit: 1000,
   ),
   BmsSettingDefinition(
     key: BmsSettingKey.dayToSleep,

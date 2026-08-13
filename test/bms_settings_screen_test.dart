@@ -52,13 +52,13 @@ void main() {
     expect(find.text('NMC'), findsOneWidget);
     expect(find.text('LTO'), findsOneWidget);
     expect(find.text('VOLTAGE PROTECTION'), findsOneWidget);
-    expect(find.text('3600'), findsOneWidget);
+    expect(find.text('3.600'), findsOneWidget);
 
     await tester.tap(find.text('LFP'));
     await tester.pump();
 
-    expect(find.text('3650'), findsOneWidget);
-    expect(find.text('2500'), findsOneWidget);
+    expect(find.text('3.650'), findsOneWidget);
+    expect(find.textContaining('UVP >2.500 and <3.000 V'), findsOneWidget);
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1500));
     await tester.pump();

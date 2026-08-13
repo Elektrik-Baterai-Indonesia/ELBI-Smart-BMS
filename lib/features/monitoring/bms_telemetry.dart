@@ -3,6 +3,8 @@ import 'dart:convert';
 import '../settings/bms_settings.dart';
 
 class BmsTelemetry {
+  static const minimumValidCellVoltageMillivolts = 500;
+
   const BmsTelemetry({
     required this.serialNumber,
     required this.soc,
@@ -24,20 +26,17 @@ class BmsTelemetry {
   final BmsSettings? settings;
 
   List<int> get monitoringCellVoltageMillivolts {
-    var reportedLength = cellVoltageMillivolts.length;
-    while (reportedLength > 0 &&
-        cellVoltageMillivolts[reportedLength - 1] == 0) {
-      reportedLength--;
-    }
-    return List.unmodifiable(cellVoltageMillivolts.take(reportedLength));
+    return List.unmodifiable(
+      cellVoltageMillivolts.where(
+        (voltage) => voltage >= minimumValidCellVoltageMillivolts,
+      ),
+    );
   }
 
   int get monitoringCellCount => monitoringCellVoltageMillivolts.length;
 
   List<int> get activeCellVoltageMillivolts {
-    return monitoringCellVoltageMillivolts
-        .where((voltage) => voltage > 0)
-        .toList();
+    return monitoringCellVoltageMillivolts;
   }
 
   int get activeCellCount => activeCellVoltageMillivolts.length;

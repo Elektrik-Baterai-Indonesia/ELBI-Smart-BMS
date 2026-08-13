@@ -11,15 +11,21 @@ Current version: **1.0.4 (build 4)**
 - Discover nearby BLE devices and save devices for later use.
 - Connect to a selected saved BMS and display live pack telemetry.
 - Display state of charge, voltage, current, temperature, status, and errors.
+- Decode the BMS `error_code` bitmask into individual, localized descriptions
+  for bits 0 through 17.
 - Display a flexible number of reported cell voltages with minimum, maximum,
-  and difference statistics; unused trailing zero placeholders are hidden.
+  and difference statistics. Values below `500 mV` are excluded from the
+  detected series-cell count and Cell tab.
 - Show charging state when current is greater than `0.5 A`.
 - Show a low-battery state when SOC is below `15%`.
 - Read current device parameters from the telemetry payload.
 - Optionally record every valid Bluetooth telemetry packet to a CSV file from
   connection until disconnection. Logs are saved in
-  `Download/ELBI Smart BMS`.
+  `Download/ELBI Smart BMS`, with cell-voltage columns matching the detected
+  valid cell count of the monitored BMS (`>=500 mV`).
 - Apply LFP, NMC, or LTO chemistry presets before saving device parameters.
+- Validate UVP and OVP against strict chemistry-specific limits and require
+  battery over-temperature protection to remain below `60°C`.
 - Edit and send BMS protection, current, temperature, balancing, and system
   parameters.
 - Fall back to locally saved or default parameters when telemetry has no
@@ -109,6 +115,11 @@ object through `FFE1` and saves the values locally after a successful write:
 The two over-current delay fields are displayed and edited in seconds. Their
 `docc` and `docd` BLE values remain milliseconds for firmware compatibility
 (`1 s` is sent as `1000`, for example).
+
+Cell voltages and voltage-related Device Settings fields are displayed in
+volts with three decimal places. BLE settings values and CSV cell columns
+remain in millivolts for firmware and raw-data compatibility (`3.650 V` is
+sent as `3650`, for example).
 
 The Battery Type selector applies LFP, NMC, or LTO preset values to the fields
 provided by that chemistry preset. Current limits, battery capacity, and shunt

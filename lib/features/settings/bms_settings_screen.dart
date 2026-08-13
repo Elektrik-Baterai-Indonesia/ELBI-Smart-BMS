@@ -78,6 +78,7 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
                           for (final section in BmsSettingsSection.values) ...[
                             _SettingsSectionCard(
                               section: section,
+                              batteryType: _selectedBatteryType,
                               definitions: bmsSettingDefinitions
                                   .where(
                                     (definition) =>
@@ -173,7 +174,19 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
   }
 
   Future<void> _saveSettings() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final validationMessage = _settingsValidationMessage();
+    final formIsValid = _formKey.currentState?.validate() ?? false;
+    if (validationMessage != null || !formIsValid) {
+      _showMessage(
+        validationMessage ??
+            context.translate(
+              'Enter a valid value for every parameter.',
+              'Masukkan nilai yang valid untuk setiap parameter.',
+            ),
+        isError: true,
+      );
+      return;
+    }
 
     final settings = BmsSettings({
       for (final definition in bmsSettingDefinitions)
@@ -245,6 +258,46 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  String? _settingsValidationMessage() {
+    final batteryType = _selectedBatteryType;
+    if (batteryType == null) {
+      return context.translate(
+        'Select LFP, NMC, or LTO before saving parameters.',
+        'Pilih LFP, NMC, atau LTO sebelum menyimpan parameter.',
+      );
+    }
+
+    for (final definition in bmsSettingDefinitions) {
+      final value = double.tryParse(_controllers[definition.key]?.text ?? '');
+      if (value == null || value < 0) {
+        return context.translate(
+          'Enter a valid value for ${definition.label.replaceAll('\n', ' ')}.',
+          'Masukkan nilai yang valid untuk ${_localizedSettingLabel(context, definition).replaceAll('\n', ' ')}.',
+        );
+      }
+      final limit = bmsSettingValueLimitFor(definition.key, batteryType);
+      final protocolValue = definition.toProtocolValue(value);
+      if (limit == null || limit.allows(protocolValue)) continue;
+
+      if (definition.key == BmsSettingKey.overTemperatureBattery) {
+        return context.translate(
+          'Over Temperature Battery must be below 60°C.',
+          'Suhu Baterai Berlebih harus di bawah 60°C.',
+        );
+      }
+      return context.translate(
+        '${definition.label.replaceAll('\n', ' ')} for ${batteryType.label} '
+            'must be above ${_formatMillivoltsAsVolts(limit.minimumExclusive!)} '
+            'and below ${_formatMillivoltsAsVolts(limit.maximumExclusive!)} V.',
+        '${_localizedSettingLabel(context, definition).replaceAll('\n', ' ')} '
+            'untuk ${batteryType.label} harus di atas '
+            '${_formatMillivoltsAsVolts(limit.minimumExclusive!)} dan di bawah '
+            '${_formatMillivoltsAsVolts(limit.maximumExclusive!)} V.',
+      );
+    }
+    return null;
   }
 
   void _showMessage(String message, {bool isError = false}) {
@@ -381,6 +434,17 @@ class _BatteryTypePresetCard extends StatelessWidget {
               ),
             ),
           ),
+          if (selectedType != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _batteryTypeLimitText(context, selectedType!),
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 11,
+                height: 1.35,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -390,11 +454,13 @@ class _BatteryTypePresetCard extends StatelessWidget {
 class _SettingsSectionCard extends StatelessWidget {
   const _SettingsSectionCard({
     required this.section,
+    required this.batteryType,
     required this.definitions,
     required this.controllers,
   });
 
   final BmsSettingsSection section;
+  final BmsBatteryType? batteryType;
   final List<BmsSettingDefinition> definitions;
   final Map<BmsSettingKey, TextEditingController> controllers;
 
@@ -430,6 +496,7 @@ class _SettingsSectionCard extends StatelessWidget {
             _SettingRow(
               definition: definitions[index],
               controller: controllers[definitions[index].key]!,
+              batteryType: batteryType,
             ),
             if (index < definitions.length - 1)
               const Divider(height: 1, color: Color(0xFFE5E5E5)),
@@ -462,10 +529,15 @@ class _SettingsSectionCard extends StatelessWidget {
 }
 
 class _SettingRow extends StatelessWidget {
-  const _SettingRow({required this.definition, required this.controller});
+  const _SettingRow({
+    required this.definition,
+    required this.controller,
+    required this.batteryType,
+  });
 
   final BmsSettingDefinition definition;
   final TextEditingController controller;
+  final BmsBatteryType? batteryType;
 
   @override
   Widget build(BuildContext context) {
@@ -528,7 +600,15 @@ class _SettingRow extends StatelessWidget {
               ),
               validator: (value) {
                 final number = double.tryParse(value ?? '');
-                return number == null || number < 0 ? '' : null;
+                if (number == null || number < 0) return '';
+                final limit = bmsSettingValueLimitFor(
+                  definition.key,
+                  batteryType,
+                );
+                final protocolValue = definition.toProtocolValue(number);
+                return limit != null && !limit.allows(protocolValue)
+                    ? ''
+                    : null;
               },
             ),
           ),
@@ -536,6 +616,36 @@ class _SettingRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _batteryTypeLimitText(BuildContext context, BmsBatteryType batteryType) {
+  final underVoltage = bmsSettingValueLimitFor(
+    BmsSettingKey.underVoltageProtection,
+    batteryType,
+  )!;
+  final overVoltage = bmsSettingValueLimitFor(
+    BmsSettingKey.overVoltageProtection,
+    batteryType,
+  )!;
+  return context.translate(
+    '${batteryType.label}: UVP '
+        '>${_formatMillivoltsAsVolts(underVoltage.minimumExclusive!)} and '
+        '<${_formatMillivoltsAsVolts(underVoltage.maximumExclusive!)} V • OVP '
+        '>${_formatMillivoltsAsVolts(overVoltage.minimumExclusive!)} and '
+        '<${_formatMillivoltsAsVolts(overVoltage.maximumExclusive!)} V • '
+        'Battery temperature '
+        '<60°C',
+    '${batteryType.label}: UVP '
+        '>${_formatMillivoltsAsVolts(underVoltage.minimumExclusive!)} dan '
+        '<${_formatMillivoltsAsVolts(underVoltage.maximumExclusive!)} V • OVP '
+        '>${_formatMillivoltsAsVolts(overVoltage.minimumExclusive!)} dan '
+        '<${_formatMillivoltsAsVolts(overVoltage.maximumExclusive!)} V • '
+        'Suhu baterai <60°C',
+  );
+}
+
+String _formatMillivoltsAsVolts(double millivolts) {
+  return (millivolts / 1000).toStringAsFixed(3);
 }
 
 String _localizedSettingLabel(

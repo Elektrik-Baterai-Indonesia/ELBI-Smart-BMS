@@ -132,9 +132,13 @@ class UserManualScreen extends StatelessWidget {
                         ),
                         description: context.translate(
                           'The Pack tab shows state of charge, voltage, '
-                              'current, temperature, status, and error logs.',
+                              'current, temperature, status, and error logs. '
+                              'Each active error-code bit is shown as its own '
+                              'row with a description.',
                           'Tab Paket menampilkan tingkat daya, tegangan, arus, '
-                              'suhu, status, dan log kesalahan.',
+                              'suhu, status, dan log kesalahan. Setiap bit kode '
+                              'kesalahan yang aktif ditampilkan sebagai baris '
+                              'tersendiri beserta deskripsinya.',
                         ),
                       ),
                       _ManualStep(
@@ -146,12 +150,15 @@ class UserManualScreen extends StatelessWidget {
                         description: context.translate(
                           'Open the Cell tab to see maximum, minimum, and '
                               'difference statistics plus every cell reported '
-                              'by the BMS. The displayed cell count adjusts '
-                              'automatically.',
+                              'by the BMS. Cell voltages are shown in volts, '
+                              'and the displayed cell count adjusts '
+                              'automatically. Values below 0.500 V are not '
+                              'counted as series cells.',
                           'Buka tab Sel untuk melihat statistik maksimum, '
                               'minimum, selisih, dan setiap sel yang dilaporkan '
-                              'BMS. Jumlah sel yang ditampilkan menyesuaikan '
-                              'secara otomatis.',
+                              'BMS. Tegangan sel ditampilkan dalam volt, dan '
+                              'jumlah sel menyesuaikan secara otomatis. Nilai '
+                              'di bawah 0,500 V tidak dihitung sebagai sel seri.',
                         ),
                       ),
                     ],
@@ -188,11 +195,13 @@ class UserManualScreen extends StatelessWidget {
                           'Enable Record data in App Settings before '
                               'connecting. Recording starts when Bluetooth '
                               'connects and stops when it disconnects. The CSV '
-                              'file is saved in Download/ELBI Smart BMS.',
+                              'file is saved in Download/ELBI Smart BMS, with '
+                              'cell columns matching the monitored BMS.',
                           'Aktifkan Rekam data di Pengaturan Aplikasi sebelum '
                               'menghubungkan. Perekaman dimulai saat Bluetooth '
                               'terhubung dan berhenti saat terputus. File CSV '
-                              'disimpan di Download/ELBI Smart BMS.',
+                              'disimpan di Download/ELBI Smart BMS, dengan '
+                              'kolom sel sesuai BMS yang dipantau.',
                         ),
                       ),
                       _ManualStep(
@@ -222,13 +231,21 @@ class UserManualScreen extends StatelessWidget {
                           'Review every value before saving. Current limits, '
                               'battery capacity, and shunt resistance are not '
                               'changed by a preset. Delay values are shown in '
-                              'seconds. Tap Save Parameters to send the final '
-                              'values to the connected BMS.',
+                              'seconds, and voltage settings are shown in '
+                              'volts. UVP and OVP must stay inside the strict '
+                              'range shown for the selected chemistry, and '
+                              'battery over-temperature must be below 60°C. '
+                              'Tap Save Parameters to send the final values to '
+                              'the connected BMS.',
                           'Periksa setiap nilai sebelum menyimpan. Batas arus, '
                               'kapasitas baterai, dan resistansi shunt tidak '
                               'diubah oleh preset. Nilai jeda ditampilkan dalam '
-                              'detik. Ketuk Simpan Parameter untuk mengirim '
-                              'nilai akhir ke BMS yang terhubung.',
+                              'detik dan pengaturan tegangan ditampilkan dalam '
+                              'volt. UVP dan OVP harus berada dalam rentang '
+                              'ketat yang ditampilkan untuk jenis baterai, dan '
+                              'suhu berlebih baterai harus di bawah 60°C. Ketuk '
+                              'Simpan Parameter untuk mengirim nilai akhir ke '
+                              'BMS yang terhubung.',
                         ),
                       ),
                       _ManualStep(

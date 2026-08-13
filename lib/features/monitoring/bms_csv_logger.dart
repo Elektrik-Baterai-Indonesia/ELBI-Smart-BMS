@@ -79,13 +79,13 @@ class BmsCsvLogger {
     _operations = _create();
   }
 
-  static const _cellCount = 24;
-
   final SavedDevice device;
   final CsvStorage _storage;
   final DateTime _startedAt;
   late Future<void> _operations;
   CsvDownloadSession? _session;
+  int? _cellCount;
+  bool _headerWritten = false;
   bool _finishing = false;
 
   Future<void> get ready => _operations;
@@ -100,9 +100,14 @@ class BmsCsvLogger {
 
   void record(BmsTelemetry telemetry, DateTime receivedAt) {
     if (_finishing) return;
-    final row = _rowFor(telemetry, receivedAt);
+    final cellCount = _cellCount ??= telemetry.monitoringCellCount;
+    final writeHeader = !_headerWritten;
+    _headerWritten = true;
+    final content =
+        '${writeHeader ? _headerFor(cellCount) : ''}'
+        '${_rowFor(telemetry, receivedAt, cellCount)}';
     _operations = _operations.then((_) {
-      return _storage.append(_session!.id, row);
+      return _storage.append(_session!.id, content);
     });
   }
 
@@ -114,6 +119,10 @@ class BmsCsvLogger {
     _finishing = true;
     String? savedLocation;
     _operations = _operations.then((_) async {
+      if (!_headerWritten) {
+        await _storage.append(_session!.id, _headerFor(0));
+        _headerWritten = true;
+      }
       savedLocation = await _storage.finish(_session!.id);
     });
     await _operations;
@@ -121,15 +130,14 @@ class BmsCsvLogger {
   }
 
   Future<void> _create() async {
-    _session = await _storage.create(filename: filename, header: _header);
+    _session = await _storage.create(filename: filename, header: '');
   }
 
-  String _rowFor(BmsTelemetry telemetry, DateTime receivedAt) {
+  String _rowFor(BmsTelemetry telemetry, DateTime receivedAt, int cellCount) {
+    final reportedCells = telemetry.monitoringCellVoltageMillivolts;
     final cells = [
-      for (var index = 0; index < _cellCount; index++)
-        index < telemetry.cellVoltageMillivolts.length
-            ? telemetry.cellVoltageMillivolts[index].toString()
-            : '',
+      for (var index = 0; index < cellCount; index++)
+        index < reportedCells.length ? reportedCells[index].toString() : '',
     ];
     final columns = <String>[
       _csvCell(receivedAt.toIso8601String()),
@@ -146,7 +154,7 @@ class BmsCsvLogger {
     return '${columns.join(',')}\n';
   }
 
-  static String get _header {
+  static String _headerFor(int cellCount) {
     final columns = <String>[
       'timestamp',
       'device_id',
@@ -157,7 +165,7 @@ class BmsCsvLogger {
       'current_a',
       'temperature_c',
       'error_code',
-      for (var index = 1; index <= _cellCount; index++)
+      for (var index = 1; index <= cellCount; index++)
         'cell_${index.toString().padLeft(2, '0')}_mv',
     ];
     return '${columns.join(',')}\n';

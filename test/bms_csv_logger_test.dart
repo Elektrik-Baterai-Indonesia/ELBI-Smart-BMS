@@ -39,12 +39,45 @@ void main() {
       final lines = storage.content.trimRight().split('\n');
       expect(lines, hasLength(2));
       expect(lines.first, contains('timestamp,device_id,device_name'));
-      expect(lines.first, contains('cell_24_mv'));
+      expect(lines.first, contains('cell_01_mv,cell_02_mv'));
+      expect(lines.first, isNot(contains('cell_03_mv')));
+      expect(lines.first.split(','), hasLength(11));
       expect(lines.last, contains('2026-08-04T09:07:08.000'));
       expect(lines.last, contains('TEST-BMS-01,"BMS, Test",00BB1000'));
       expect(lines.last, contains('16,50.89,-18.34,25.0,0,3153,3185'));
     },
   );
+
+  test('CSV cell columns ignore values below the valid-cell range', () async {
+    final storage = _MemoryCsvStorage();
+    final logger = BmsCsvLogger(
+      device: SavedDevice(
+        id: 'TEST-BMS-02',
+        name: 'BMS Test',
+        savedAt: DateTime.utc(2026, 8, 4),
+      ),
+      storage: storage,
+    );
+
+    logger.record(
+      const BmsTelemetry(
+        serialNumber: 'TEST0002',
+        soc: 80,
+        voltage: 13.2,
+        current: 2,
+        temperature: 24,
+        errorCode: 0,
+        cellVoltageMillivolts: [3300, 499, 3290, 0],
+      ),
+      DateTime.parse('2026-08-04T10:00:00.000'),
+    );
+    await logger.finish();
+
+    final lines = storage.content.trimRight().split('\n');
+    expect(lines.first, contains('cell_01_mv,cell_02_mv'));
+    expect(lines.first, isNot(contains('cell_03_mv')));
+    expect(lines.last, endsWith(',3300,3290'));
+  });
 }
 
 class _MemoryCsvStorage implements CsvStorage {

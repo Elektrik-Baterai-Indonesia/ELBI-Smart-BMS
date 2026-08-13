@@ -16,6 +16,7 @@ import '../settings/bms_settings_screen.dart';
 import 'ble_debug_controller.dart';
 import 'ble_debug_screen.dart';
 import 'bms_csv_logger.dart';
+import 'bms_error_catalog.dart';
 import 'bms_telemetry.dart';
 
 class DeviceMonitoringScreen extends StatefulWidget {
@@ -560,18 +561,44 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
         _errorLogs.clear();
       } else {
         _errorLogs.removeWhere((log) => log.liveTelemetry);
-        _errorLogs.insert(
-          0,
-          _ErrorLogEntry(
-            timestamp: _formatTimestamp(receivedAt),
-            code: 'F${telemetry.errorCode}',
-            description: context.translate(
-              'BMS error code ${telemetry.errorCode}',
-              'Kode kesalahan BMS ${telemetry.errorCode}',
+        final timestamp = _formatTimestamp(receivedAt);
+        final decodedErrors = activeBmsErrors(telemetry.errorCode);
+        final unknownBits = unknownBmsErrorBits(telemetry.errorCode);
+        _errorLogs.insertAll(0, [
+          for (final error in decodedErrors)
+            _ErrorLogEntry(
+              timestamp: timestamp,
+              code: 'B${error.bit.toString().padLeft(2, '0')}',
+              description: error.description(
+                useIndonesian: context.usesIndonesian,
+              ),
+              liveTelemetry: true,
             ),
-            liveTelemetry: true,
-          ),
-        );
+          for (final bit in unknownBits)
+            _ErrorLogEntry(
+              timestamp: timestamp,
+              code: 'B${bit.toString().padLeft(2, '0')}',
+              description: context.translate(
+                'Unknown BMS error bit',
+                'Bit kesalahan BMS tidak dikenal',
+              ),
+              liveTelemetry: true,
+            ),
+        ]);
+        if (decodedErrors.isEmpty && unknownBits.isEmpty) {
+          _errorLogs.insert(
+            0,
+            _ErrorLogEntry(
+              timestamp: timestamp,
+              code: 'F${telemetry.errorCode}',
+              description: context.translate(
+                'Invalid BMS error bitmask',
+                'Bitmask kesalahan BMS tidak valid',
+              ),
+              liveTelemetry: true,
+            ),
+          );
+        }
       }
     });
   }
@@ -1431,8 +1458,10 @@ class _CellMonitoringSection extends StatelessWidget {
           children: [
             Expanded(
               child: _CellStatisticCard(
-                label: context.translate('VCell Max (mV)', 'VCell Maks (mV)'),
-                value: maximum?.value,
+                label: context.translate('VCell Max (V)', 'VCell Maks (V)'),
+                value: maximum == null
+                    ? null
+                    : _formatCellVoltageVolts(maximum.value),
                 cellIndex: maximum?.key,
                 valueColor: const Color(0xFF087CFF),
               ),
@@ -1440,8 +1469,10 @@ class _CellMonitoringSection extends StatelessWidget {
             const SizedBox(width: 18),
             Expanded(
               child: _CellStatisticCard(
-                label: context.translate('VCell Min (mV)', 'VCell Min (mV)'),
-                value: minimum?.value,
+                label: context.translate('VCell Min (V)', 'VCell Min (V)'),
+                value: minimum == null
+                    ? null
+                    : _formatCellVoltageVolts(minimum.value),
                 cellIndex: minimum?.key,
                 valueColor: const Color(0xFFFF5364),
               ),
@@ -1449,8 +1480,10 @@ class _CellMonitoringSection extends StatelessWidget {
             const SizedBox(width: 18),
             Expanded(
               child: _CellStatisticCard(
-                label: context.translate('VCell Diff', 'Selisih VCell'),
-                value: difference,
+                label: context.translate('VCell Diff (V)', 'Selisih VCell (V)'),
+                value: difference == null
+                    ? null
+                    : _formatCellVoltageVolts(difference),
                 valueColor: const Color(0xFF008447),
               ),
             ),
@@ -1461,7 +1494,7 @@ class _CellMonitoringSection extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                context.translate('Cell Voltage (mV)', 'Tegangan Sel (mV)'),
+                context.translate('Cell Voltage (V)', 'Tegangan Sel (V)'),
                 style: const TextStyle(
                   color: AppColors.text,
                   fontSize: 14,
@@ -1533,7 +1566,7 @@ class _CellStatisticCard extends StatelessWidget {
   });
 
   final String label;
-  final int? value;
+  final String? value;
   final int? cellIndex;
   final Color valueColor;
 
@@ -1626,7 +1659,7 @@ class _CellVoltageTile extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              voltage.toString(),
+              _formatCellVoltageVolts(voltage),
               textAlign: TextAlign.center,
               maxLines: 1,
               style: TextStyle(
@@ -1640,6 +1673,10 @@ class _CellVoltageTile extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatCellVoltageVolts(int millivolts) {
+  return (millivolts / 1000).toStringAsFixed(3);
 }
 
 class _MetricGrid extends StatelessWidget {

@@ -55,11 +55,11 @@ void main() {
     await tester.pump();
 
     expect(find.text('Statistic'), findsOneWidget);
-    expect(find.text('VCell Max (mV)'), findsOneWidget);
-    expect(find.text('VCell Min (mV)'), findsOneWidget);
-    expect(find.text('Cell Voltage (mV)'), findsOneWidget);
+    expect(find.text('VCell Max (V)'), findsOneWidget);
+    expect(find.text('VCell Min (V)'), findsOneWidget);
+    expect(find.text('Cell Voltage (V)'), findsOneWidget);
     expect(find.text('24 cells'), findsOneWidget);
-    expect(find.text('3881'), findsNWidgets(2));
+    expect(find.text('3.881'), findsNWidgets(2));
     expect(find.text('24'), findsOneWidget);
     expect(find.text('Error Logs'), findsNothing);
   });
