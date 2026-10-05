@@ -3,7 +3,7 @@
 ELBI Smart BMS is a Flutter Android application for adding, configuring, and
 monitoring Battery Management Systems over Bluetooth Low Energy (BLE).
 
-Current version: **1.0.4 (build 4)**
+Current version: **1.0.5 (build 5)**
 
 ## Features
 

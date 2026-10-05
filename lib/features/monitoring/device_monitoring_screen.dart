@@ -124,6 +124,9 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
     super.initState();
     if (widget.demoMode) {
       _errorLogs = [];
+      _deviceSettings = BmsSettings.defaults().applyBatteryTypePreset(
+        BmsBatteryType.nmc,
+      );
       _startDemo();
     } else {
       _errorLogs = [];

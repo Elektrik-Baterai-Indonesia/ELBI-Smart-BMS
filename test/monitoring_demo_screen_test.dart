@@ -36,4 +36,18 @@ void main() {
     expect(find.text('52%'), findsOneWidget);
     expect(find.text('Charging'), findsOneWidget);
   });
+
+  testWidgets('device settings opens safely from monitoring demo', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: MonitoringDemoScreen()));
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('BMS Setting'), findsOneWidget);
+    expect(find.text('BATTERY TYPE'), findsOneWidget);
+  });
 }

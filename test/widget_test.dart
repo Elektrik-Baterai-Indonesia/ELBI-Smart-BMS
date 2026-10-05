@@ -75,7 +75,7 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
-    expect(find.text('Version 1.0.4 (4)'), findsOneWidget);
+    expect(find.text('Version 1.0.5 (5)'), findsOneWidget);
 
     await tester.drag(find.byType(ListView), const Offset(0, 500));
     await tester.pumpAndSettle();

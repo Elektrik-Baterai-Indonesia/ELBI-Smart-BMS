@@ -36,9 +36,9 @@ enum BmsBatteryType {
 
   Map<BmsSettingKey, double> get presetValues => switch (this) {
     BmsBatteryType.lfp => const {
-      BmsSettingKey.overVoltageProtection: 3650,
+      BmsSettingKey.overVoltageProtection: 3649,
       BmsSettingKey.overVoltageRelease: 3450,
-      BmsSettingKey.underVoltageProtection: 2800,
+      BmsSettingKey.underVoltageProtection: 2801,
       BmsSettingKey.underVoltageRelease: 3000,
       BmsSettingKey.delayOverCurrentCharge: 1000,
       BmsSettingKey.delayOverCurrentDischarge: 2000,
@@ -46,7 +46,7 @@ enum BmsBatteryType {
       BmsSettingKey.overTemperatureBatteryRelease: 45,
       BmsSettingKey.overTemperatureMosfet: 85,
       BmsSettingKey.overTemperatureMosfetRelease: 70,
-      BmsSettingKey.balancingMinimum: 3400,
+      BmsSettingKey.balancingMinimum: 2799,
       BmsSettingKey.balancingDifferent: 20,
       BmsSettingKey.dayToSleep: 7,
     },
@@ -61,7 +61,7 @@ enum BmsBatteryType {
       BmsSettingKey.overTemperatureBatteryRelease: 45,
       BmsSettingKey.overTemperatureMosfet: 85,
       BmsSettingKey.overTemperatureMosfetRelease: 70,
-      BmsSettingKey.balancingMinimum: 4000,
+      BmsSettingKey.balancingMinimum: 2799,
       BmsSettingKey.balancingDifferent: 20,
       BmsSettingKey.dayToSleep: 7,
     },
@@ -104,11 +104,27 @@ BmsSettingValueLimit? bmsSettingValueLimitFor(
   if (key == BmsSettingKey.overTemperatureBattery) {
     return const BmsSettingValueLimit(maximumExclusive: 60);
   }
+  if (key == BmsSettingKey.balancingMinimum) {
+    return const BmsSettingValueLimit(
+      minimumExclusive: 0,
+      maximumExclusive: 2800,
+    );
+  }
+  if (key == BmsSettingKey.balancingDifferent ||
+      key == BmsSettingKey.overCurrentCharge ||
+      key == BmsSettingKey.overCurrentDischarge ||
+      key == BmsSettingKey.resistorShunt) {
+    return const BmsSettingValueLimit(minimumExclusive: 0);
+  }
   if (batteryType == null) return null;
 
   if (key == BmsSettingKey.underVoltageProtection) {
     return switch (batteryType) {
-      BmsBatteryType.lfp || BmsBatteryType.nmc => const BmsSettingValueLimit(
+      BmsBatteryType.lfp => const BmsSettingValueLimit(
+        minimumExclusive: 2800,
+        maximumExclusive: 3650,
+      ),
+      BmsBatteryType.nmc => const BmsSettingValueLimit(
         minimumExclusive: 2500,
         maximumExclusive: 3000,
       ),
@@ -122,8 +138,8 @@ BmsSettingValueLimit? bmsSettingValueLimitFor(
   if (key == BmsSettingKey.overVoltageProtection) {
     return switch (batteryType) {
       BmsBatteryType.lfp => const BmsSettingValueLimit(
-        minimumExclusive: 3300,
-        maximumExclusive: 3700,
+        minimumExclusive: 2800,
+        maximumExclusive: 3650,
       ),
       BmsBatteryType.nmc => const BmsSettingValueLimit(
         minimumExclusive: 3800,
@@ -275,7 +291,7 @@ const bmsSettingDefinitions = [
     label: 'Resistor Shunt',
     unit: 'mΩ',
     defaultValue: 1.5,
-    decimalPlaces: 1,
+    decimalPlaces: 3,
   ),
   BmsSettingDefinition(
     key: BmsSettingKey.balancingMinimum,

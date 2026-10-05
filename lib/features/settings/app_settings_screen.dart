@@ -11,8 +11,8 @@ import 'app_settings_controller.dart';
 class AppSettingsScreen extends StatelessWidget {
   const AppSettingsScreen({super.key});
 
-  static const _appVersion = '1.0.4';
-  static const _buildNumber = '4';
+  static const _appVersion = '1.0.5';
+  static const _buildNumber = '5';
 
   @override
   Widget build(BuildContext context) {

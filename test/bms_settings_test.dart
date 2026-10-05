@@ -88,15 +88,15 @@ void main() {
     final nmc = original.applyBatteryTypePreset(BmsBatteryType.nmc);
     final lto = original.applyBatteryTypePreset(BmsBatteryType.lto);
 
-    expect(lfp.valueFor(BmsSettingKey.overVoltageProtection), 3650);
-    expect(lfp.valueFor(BmsSettingKey.underVoltageProtection), 2800);
+    expect(lfp.valueFor(BmsSettingKey.overVoltageProtection), 3649);
+    expect(lfp.valueFor(BmsSettingKey.underVoltageProtection), 2801);
     expect(lfp.valueFor(BmsSettingKey.underVoltageRelease), 3000);
     expect(lfp.valueFor(BmsSettingKey.overTemperatureBattery), 47);
-    expect(lfp.valueFor(BmsSettingKey.balancingMinimum), 3400);
+    expect(lfp.valueFor(BmsSettingKey.balancingMinimum), 2799);
     expect(lfp.matchingBatteryType, BmsBatteryType.lfp);
 
     expect(nmc.valueFor(BmsSettingKey.overVoltageProtection), 4199);
-    expect(nmc.valueFor(BmsSettingKey.balancingMinimum), 4000);
+    expect(nmc.valueFor(BmsSettingKey.balancingMinimum), 2799);
     expect(nmc.matchingBatteryType, BmsBatteryType.nmc);
 
     expect(lto.valueFor(BmsSettingKey.overVoltageProtection), 2750);
@@ -115,8 +115,8 @@ void main() {
   test('battery protection limits use strict chemistry boundaries', () {
     final expectedRanges = {
       BmsBatteryType.lfp: {
-        BmsSettingKey.underVoltageProtection: (2500.0, 3000.0),
-        BmsSettingKey.overVoltageProtection: (3300.0, 3700.0),
+        BmsSettingKey.underVoltageProtection: (2800.0, 3650.0),
+        BmsSettingKey.overVoltageProtection: (2800.0, 3650.0),
       },
       BmsBatteryType.nmc: {
         BmsSettingKey.underVoltageProtection: (2500.0, 3000.0),
@@ -148,6 +148,36 @@ void main() {
     )!;
     expect(temperatureLimit.allows(59.9), isTrue);
     expect(temperatureLimit.allows(60), isFalse);
+  });
+
+  test('positive-only and balancing voltage limits are strict', () {
+    for (final key in [
+      BmsSettingKey.balancingDifferent,
+      BmsSettingKey.overCurrentCharge,
+      BmsSettingKey.overCurrentDischarge,
+      BmsSettingKey.resistorShunt,
+    ]) {
+      final limit = bmsSettingValueLimitFor(key, BmsBatteryType.lfp)!;
+      expect(limit.allows(0), isFalse, reason: '$key must reject zero');
+      expect(limit.allows(0.001), isTrue, reason: '$key must allow positives');
+    }
+
+    final balancingVoltage = bmsSettingValueLimitFor(
+      BmsSettingKey.balancingMinimum,
+      BmsBatteryType.lfp,
+    )!;
+    expect(balancingVoltage.allows(0), isFalse);
+    expect(balancingVoltage.allows(1), isTrue);
+    expect(balancingVoltage.allows(2799), isTrue);
+    expect(balancingVoltage.allows(2800), isFalse);
+  });
+
+  test('shunt resistance displays with three decimal places', () {
+    final shunt = bmsSettingDefinitions.firstWhere(
+      (definition) => definition.key == BmsSettingKey.resistorShunt,
+    );
+
+    expect(shunt.decimalPlaces, 3);
   });
 
   test('BMS settings map from the Bluetooth telemetry JSON format', () {

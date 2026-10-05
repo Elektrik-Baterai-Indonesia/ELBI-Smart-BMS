@@ -143,9 +143,11 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
   Future<void> _loadSettings() async {
     final settings =
         widget.initialSettings ??
-        await (_settingsRepository ??= BmsSettingsRepository()).load(
-          widget.device.id,
-        );
+        (widget.demoMode
+            ? BmsSettings.defaults().applyBatteryTypePreset(BmsBatteryType.nmc)
+            : await (_settingsRepository ??= BmsSettingsRepository()).load(
+                widget.device.id,
+              ));
     if (!mounted) return;
 
     for (final definition in bmsSettingDefinitions) {
@@ -211,11 +213,11 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
     try {
       if (!widget.demoMode) {
         await sender!(settings.toBluetoothPayload());
+        await (_settingsRepository ??= BmsSettingsRepository()).save(
+          widget.device.id,
+          settings,
+        );
       }
-      await (_settingsRepository ??= BmsSettingsRepository()).save(
-        widget.device.id,
-        settings,
-      );
       if (!mounted) return;
 
       _showMessage(
@@ -269,14 +271,24 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
       );
     }
 
+    final values = <BmsSettingKey, double>{};
     for (final definition in bmsSettingDefinitions) {
-      final value = double.tryParse(_controllers[definition.key]?.text ?? '');
+      final rawValue = _controllers[definition.key]?.text ?? '';
+      final value = double.tryParse(rawValue);
       if (value == null || value < 0) {
         return context.translate(
           'Enter a valid value for ${definition.label.replaceAll('\n', ' ')}.',
           'Masukkan nilai yang valid untuk ${_localizedSettingLabel(context, definition).replaceAll('\n', ' ')}.',
         );
       }
+      if (definition.key == BmsSettingKey.resistorShunt &&
+          !_hasExactlyThreeDecimalPlaces(rawValue)) {
+        return context.translate(
+          'Resistor Shunt must have exactly 3 digits after the decimal point.',
+          'Resistor Shunt harus memiliki tepat 3 angka setelah tanda desimal.',
+        );
+      }
+      values[definition.key] = value;
       final limit = bmsSettingValueLimitFor(definition.key, batteryType);
       final protocolValue = definition.toProtocolValue(value);
       if (limit == null || limit.allows(protocolValue)) continue;
@@ -287,6 +299,18 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
           'Suhu Baterai Berlebih harus di bawah 60°C.',
         );
       }
+      if (definition.key == BmsSettingKey.balancingMinimum) {
+        return context.translate(
+          'Balancing Minimum must be above 0 and below 2.800 V.',
+          'Tegangan Minimum Penyeimbangan harus di atas 0 dan di bawah 2.800 V.',
+        );
+      }
+      if (limit.minimumExclusive != null && limit.maximumExclusive == null) {
+        return context.translate(
+          '${definition.label.replaceAll('\n', ' ')} must be above 0.',
+          '${_localizedSettingLabel(context, definition).replaceAll('\n', ' ')} harus di atas 0.',
+        );
+      }
       return context.translate(
         '${definition.label.replaceAll('\n', ' ')} for ${batteryType.label} '
             'must be above ${_formatMillivoltsAsVolts(limit.minimumExclusive!)} '
@@ -295,6 +319,21 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
             'untuk ${batteryType.label} harus di atas '
             '${_formatMillivoltsAsVolts(limit.minimumExclusive!)} dan di bawah '
             '${_formatMillivoltsAsVolts(limit.maximumExclusive!)} V.',
+      );
+    }
+
+    if (values[BmsSettingKey.overVoltageRelease]! >=
+        values[BmsSettingKey.overVoltageProtection]!) {
+      return context.translate(
+        'Over Voltage Protection Release must be below Over Voltage Protection.',
+        'Pelepasan Proteksi Tegangan Berlebih harus di bawah Proteksi Tegangan Berlebih.',
+      );
+    }
+    if (values[BmsSettingKey.underVoltageRelease]! <=
+        values[BmsSettingKey.underVoltageProtection]!) {
+      return context.translate(
+        'Under Voltage Protection Release must be above Under Voltage Protection.',
+        'Pelepasan Proteksi Tegangan Rendah harus di atas Proteksi Tegangan Rendah.',
       );
     }
     return null;
@@ -565,7 +604,11 @@ class _SettingRow extends StatelessWidget {
                 decimal: true,
               ),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
+                FilteringTextInputFormatter.allow(
+                  definition.key == BmsSettingKey.resistorShunt
+                      ? RegExp(r'^\d*\.?\d{0,3}$')
+                      : RegExp(r'^\d*\.?\d*$'),
+                ),
               ],
               textAlign: TextAlign.right,
               style: const TextStyle(
@@ -617,6 +660,9 @@ class _SettingRow extends StatelessWidget {
     );
   }
 }
+
+bool _hasExactlyThreeDecimalPlaces(String value) =>
+    RegExp(r'^\d+\.\d{3}$').hasMatch(value);
 
 String _batteryTypeLimitText(BuildContext context, BmsBatteryType batteryType) {
   final underVoltage = bmsSettingValueLimitFor(

@@ -57,13 +57,74 @@ void main() {
     await tester.tap(find.text('LFP'));
     await tester.pump();
 
-    expect(find.text('3.650'), findsOneWidget);
-    expect(find.textContaining('UVP >2.500 and <3.000 V'), findsOneWidget);
+    expect(find.text('3.649'), findsOneWidget);
+    expect(find.textContaining('UVP >2.800 and <3.650 V'), findsOneWidget);
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1500));
     await tester.pump();
 
     expect(find.text('SYSTEM & BALANCING'), findsOneWidget);
+    expect(find.text('1.500'), findsOneWidget);
     expect(find.text('Save Parameters'), findsOneWidget);
   });
+
+  testWidgets('over-voltage release must be below protection', (tester) async {
+    await _pumpLfpSettings(tester);
+
+    await tester.enterText(find.byType(TextFormField).at(1), '3.649');
+    tester.testTextInput.hide();
+    await _tapSave(tester);
+
+    expect(
+      find.text(
+        'Over Voltage Protection Release must be below Over Voltage Protection.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('under-voltage release must be above protection', (tester) async {
+    await _pumpLfpSettings(tester);
+
+    await tester.enterText(find.byType(TextFormField).at(3), '2.801');
+    tester.testTextInput.hide();
+    await _tapSave(tester);
+
+    expect(
+      find.text(
+        'Under Voltage Protection Release must be above Under Voltage Protection.',
+      ),
+      findsOneWidget,
+    );
+  });
+}
+
+Future<void> _pumpLfpSettings(WidgetTester tester) async {
+  final device = SavedDevice(
+    id: 'AA:BB:CC:DD:EE:04',
+    name: 'BMS validation test',
+    savedAt: DateTime.utc(2026, 10, 5),
+  );
+  await tester.pumpWidget(
+    MaterialApp(
+      home: BmsSettingsScreen(
+        device: device,
+        demoMode: true,
+        initialSettings: BmsSettings.defaults().applyBatteryTypePreset(
+          BmsBatteryType.lfp,
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+}
+
+Future<void> _tapSave(WidgetTester tester) async {
+  await tester.drag(find.byType(CustomScrollView), const Offset(0, -1800));
+  await tester.pump();
+  final saveButton = find.text('Save Parameters');
+  await tester.ensureVisible(saveButton);
+  await tester.pump();
+  await tester.tap(saveButton);
+  await tester.pump();
 }
