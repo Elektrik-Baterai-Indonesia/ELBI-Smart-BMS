@@ -93,16 +93,13 @@ void main() {
     expect(lfp.valueFor(BmsSettingKey.underVoltageRelease), 3000);
     expect(lfp.valueFor(BmsSettingKey.overTemperatureBattery), 47);
     expect(lfp.valueFor(BmsSettingKey.balancingMinimum), 2799);
-    expect(lfp.matchingBatteryType, BmsBatteryType.lfp);
 
     expect(nmc.valueFor(BmsSettingKey.overVoltageProtection), 4199);
     expect(nmc.valueFor(BmsSettingKey.balancingMinimum), 2799);
-    expect(nmc.matchingBatteryType, BmsBatteryType.nmc);
 
     expect(lto.valueFor(BmsSettingKey.overVoltageProtection), 2750);
     expect(lto.valueFor(BmsSettingKey.underVoltageProtection), 1800);
     expect(lto.valueFor(BmsSettingKey.balancingMinimum), 2500);
-    expect(lto.matchingBatteryType, BmsBatteryType.lto);
 
     for (final settings in [lfp, nmc, lto]) {
       expect(settings.valueFor(BmsSettingKey.overCurrentCharge), 50);
@@ -112,11 +109,37 @@ void main() {
     }
   });
 
+  test(
+    'device configuration stores chemistry separately from custom values',
+    () {
+      final customSettings = BmsSettings.fromBluetoothJson({
+        'ovp': 3600,
+        'uvp': 2900,
+      });
+      final configuration = BmsDeviceConfiguration(
+        settings: customSettings,
+        batteryType: BmsBatteryType.lfp,
+      );
+
+      final restored = BmsDeviceConfiguration.fromJson(configuration.toJson());
+
+      expect(restored.batteryType, BmsBatteryType.lfp);
+      expect(
+        restored.settings.valueFor(BmsSettingKey.overVoltageProtection),
+        3600,
+      );
+      expect(
+        restored.settings.valueFor(BmsSettingKey.underVoltageProtection),
+        2900,
+      );
+    },
+  );
+
   test('battery protection limits use strict chemistry boundaries', () {
     final expectedRanges = {
       BmsBatteryType.lfp: {
-        BmsSettingKey.underVoltageProtection: (2800.0, 3650.0),
-        BmsSettingKey.overVoltageProtection: (2800.0, 3650.0),
+        BmsSettingKey.underVoltageProtection: (2699.0, 3701.0),
+        BmsSettingKey.overVoltageProtection: (2699.0, 3701.0),
       },
       BmsBatteryType.nmc: {
         BmsSettingKey.underVoltageProtection: (2500.0, 3000.0),

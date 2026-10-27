@@ -57,8 +57,16 @@ void main() {
     await tester.tap(find.text('LFP'));
     await tester.pump();
 
+    expect(find.text('3.600'), findsOneWidget);
+    expect(find.text('Apply preset'), findsOneWidget);
+    expect(find.textContaining('UVP >2.699 and <3.701 V'), findsOneWidget);
+
+    await tester.tap(find.text('Apply preset'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply preset'));
+    await tester.pumpAndSettle();
+
     expect(find.text('3.649'), findsOneWidget);
-    expect(find.textContaining('UVP >2.800 and <3.650 V'), findsOneWidget);
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1500));
     await tester.pump();
@@ -113,6 +121,7 @@ Future<void> _pumpLfpSettings(WidgetTester tester) async {
         initialSettings: BmsSettings.defaults().applyBatteryTypePreset(
           BmsBatteryType.lfp,
         ),
+        initialBatteryType: BmsBatteryType.lfp,
       ),
     ),
   );

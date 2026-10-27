@@ -23,11 +23,14 @@ Current version: **1.0.5 (build 5)**
   connection until disconnection. Logs are saved in
   `Download/ELBI Smart BMS`, with cell-voltage columns matching the detected
   valid cell count of the monitored BMS (`>=500 mV`).
-- Apply LFP, NMC, or LTO chemistry presets before saving device parameters.
+- Store LFP, NMC, or LTO chemistry independently from device parameters, with
+  optional confirmed preset application.
 - Validate UVP and OVP against strict chemistry-specific limits and require
   battery over-temperature protection to remain below `60°C`.
 - Edit and send BMS protection, current, temperature, balancing, and system
   parameters.
+- Send PIN-protected `Reset SoC` and `Reset BMS` commands from the BMS
+  Commands page (lock icon on the BMS Setting page while connected or in demo mode).
 - Fall back to locally saved or default parameters when telemetry has no
   `settings` object.
 - Provide an interactive monitoring and device-settings demo.
@@ -121,10 +124,11 @@ volts with three decimal places. BLE settings values and CSV cell columns
 remain in millivolts for firmware and raw-data compatibility (`3.650 V` is
 sent as `3650`, for example).
 
-The Battery Type selector applies LFP, NMC, or LTO preset values to the fields
-provided by that chemistry preset. Current limits, battery capacity, and shunt
-resistance are preserved. Presets remain editable and are not sent until
-**Save Parameters** is pressed.
+The Battery Type selector chooses the chemistry used for validation without
+changing any parameter. **Apply preset** is a separate, confirmed action that
+fills the fields provided by that chemistry preset. Current limits, battery
+capacity, and shunt resistance are preserved. Presets remain editable and are
+not sent until **Save Parameters** is pressed.
 
 ```json
 {
@@ -148,6 +152,22 @@ resistance are preserved. Presets remain editable and are not sent until
 }
 ```
 
+## BMS commands
+
+The BMS Commands page is unlocked with the PIN from `BMS_COMMAND_PIN` in
+`.env`. Each command asks for confirmation, then writes one JSON object
+through `FFE1`:
+
+| Button | Payload |
+| --- | --- |
+| Reset SoC | `{"cmd":1}` |
+| Reset BMS | `{"cmd":2}` |
+
+After a command is sent, the app returns to the monitoring page, disconnects,
+waits about 3 seconds for the BMS to restart, then reconnects automatically
+(up to 5 attempts). Tapping Disconnect or leaving the page stops the
+reconnect. In demo mode the app only returns to the monitoring page.
+
 ## QR code format
 
 The QR scanner accepts a separated or compact Bluetooth MAC address, including
@@ -170,13 +190,23 @@ Requirements:
 - Java 17
 - A physical Android device for BLE testing
 
+Create the environment file and set the BMS Commands PIN:
+
+```bash
+cp .env.example .env
+# edit .env and set BMS_COMMAND_PIN
+```
+
 Install dependencies and run the app:
 
 ```bash
 flutter pub get
 flutter devices
-flutter run -d <device-id>
+flutter run -d <device-id> --dart-define-from-file=.env
 ```
+
+The PIN is compiled into the app at build time. Without
+`--dart-define-from-file=.env`, the BMS Commands page stays locked.
 
 ## Verification
 
@@ -196,7 +226,7 @@ and monitoring UI behavior.
 Build the release APK:
 
 ```bash
-flutter build apk --release
+flutter build apk --release --dart-define-from-file=.env
 ```
 
 Output:
@@ -219,8 +249,9 @@ app store or distributing a production release.
 
 ```text
 lib/
-  core/                  Theme and localization helpers
+  core/                  Build-time config, theme, and localization helpers
   features/
+    commands/            PIN-protected Reset SoC / Reset BMS commands
     devices/             Saved-device model, storage, and selection
     home/                Home screen and menu widgets
     manual/              In-app user manual
