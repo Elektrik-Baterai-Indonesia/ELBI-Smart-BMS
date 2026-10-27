@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../../core/localization/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
+import '../commands/bms_command.dart';
+import '../commands/bms_command_pin_dialog.dart';
+import '../commands/bms_command_screen.dart';
 import '../devices/saved_device.dart';
 import '../monitoring/ble_debug_controller.dart';
 import 'bms_settings.dart';
@@ -13,6 +16,7 @@ class BmsSettingsScreen extends StatefulWidget {
     required this.device,
     this.demoMode = false,
     this.initialSettings,
+    this.initialBatteryType,
     this.onSendParameters,
     super.key,
   });
@@ -20,6 +24,7 @@ class BmsSettingsScreen extends StatefulWidget {
   final SavedDevice device;
   final bool demoMode;
   final BmsSettings? initialSettings;
+  final BmsBatteryType? initialBatteryType;
   final Future<void> Function(String payload)? onSendParameters;
 
   @override
@@ -68,11 +73,21 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
                         children: [
                           _SettingsHeader(
                             onBack: () => Navigator.of(context).pop(),
+                            onCommands:
+                                widget.demoMode ||
+                                    widget.onSendParameters != null
+                                ? _openCommandsPage
+                                : null,
                           ),
                           const SizedBox(height: 50),
                           _BatteryTypePresetCard(
                             selectedType: _selectedBatteryType,
-                            onSelected: _applyBatteryTypePreset,
+                            onSelected: (batteryType) {
+                              setState(
+                                () => _selectedBatteryType = batteryType,
+                              );
+                            },
+                            onApplyPreset: _confirmApplyBatteryTypePreset,
                           ),
                           const SizedBox(height: 16),
                           for (final section in BmsSettingsSection.values) ...[
@@ -141,13 +156,27 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
-    final settings =
-        widget.initialSettings ??
-        (widget.demoMode
-            ? BmsSettings.defaults().applyBatteryTypePreset(BmsBatteryType.nmc)
-            : await (_settingsRepository ??= BmsSettingsRepository()).load(
-                widget.device.id,
-              ));
+    late final BmsSettings settings;
+    var batteryType = widget.initialBatteryType;
+
+    if (widget.initialSettings case final initialSettings?) {
+      settings = initialSettings;
+      if (!widget.demoMode && batteryType == null) {
+        batteryType =
+            (await (_settingsRepository ??= BmsSettingsRepository())
+                    .loadConfiguration(widget.device.id))
+                .batteryType;
+      }
+    } else if (widget.demoMode) {
+      batteryType ??= BmsBatteryType.nmc;
+      settings = BmsSettings.defaults().applyBatteryTypePreset(batteryType);
+    } else {
+      final configuration =
+          await (_settingsRepository ??= BmsSettingsRepository())
+              .loadConfiguration(widget.device.id);
+      settings = configuration.settings;
+      batteryType ??= configuration.batteryType;
+    }
     if (!mounted) return;
 
     for (final definition in bmsSettingDefinitions) {
@@ -158,9 +187,40 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
       );
     }
     setState(() {
-      _selectedBatteryType = settings.matchingBatteryType;
+      _selectedBatteryType = batteryType;
       _loading = false;
     });
+  }
+
+  Future<void> _confirmApplyBatteryTypePreset() async {
+    final batteryType = _selectedBatteryType;
+    if (batteryType == null) return;
+
+    final shouldApply = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.translate('Apply preset?', 'Terapkan preset?')),
+        content: Text(
+          context.translate(
+            'This replaces the preset-controlled parameters with the ${batteryType.label} defaults. Other values are preserved.',
+            'Ini mengganti parameter yang dikontrol preset dengan nilai bawaan ${batteryType.label}. Nilai lainnya tetap dipertahankan.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(context.translate('Cancel', 'Batal')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(context.translate('Apply preset', 'Terapkan preset')),
+          ),
+        ],
+      ),
+    );
+    if (shouldApply == true && mounted) {
+      _applyBatteryTypePreset(batteryType);
+    }
   }
 
   void _applyBatteryTypePreset(BmsBatteryType batteryType) {
@@ -213,10 +273,14 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
     try {
       if (!widget.demoMode) {
         await sender!(settings.toBluetoothPayload());
-        await (_settingsRepository ??= BmsSettingsRepository()).save(
-          widget.device.id,
-          settings,
-        );
+        await (_settingsRepository ??= BmsSettingsRepository())
+            .saveConfiguration(
+              widget.device.id,
+              BmsDeviceConfiguration(
+                settings: settings,
+                batteryType: _selectedBatteryType,
+              ),
+            );
       }
       if (!mounted) return;
 
@@ -339,6 +403,24 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
     return null;
   }
 
+  Future<void> _openCommandsPage() async {
+    final sender = widget.onSendParameters;
+    if (!widget.demoMode && sender == null) return;
+    final unlocked = await showBmsCommandPinDialog(context);
+    if (!unlocked || !mounted) return;
+    final sentCommand = await Navigator.of(context).push<BmsCommand>(
+      MaterialPageRoute(
+        builder: (_) => BmsCommandScreen(
+          device: widget.device,
+          demoMode: widget.demoMode,
+          onSendCommand: sender,
+        ),
+      ),
+    );
+    // Return to monitoring so it can reconnect after the BMS resets.
+    if (sentCommand != null && mounted) Navigator.of(context).pop(sentCommand);
+  }
+
   void _showMessage(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -353,9 +435,12 @@ class _BmsSettingsScreenState extends State<BmsSettingsScreen> {
 }
 
 class _SettingsHeader extends StatelessWidget {
-  const _SettingsHeader({required this.onBack});
+  const _SettingsHeader({required this.onBack, this.onCommands});
 
   final VoidCallback onBack;
+
+  /// Opens BMS Commands. Null hides the button (not connected, not demo).
+  final VoidCallback? onCommands;
 
   @override
   Widget build(BuildContext context) {
@@ -378,18 +463,30 @@ class _SettingsHeader extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 27),
-            child: Text(
-              context.translate('BMS Setting', 'Pengaturan BMS'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.text,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
+          child: Text(
+            context.translate('BMS Setting', 'Pengaturan BMS'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.text,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
             ),
           ),
+        ),
+        SizedBox.square(
+          dimension: 27,
+          child: onCommands == null
+              ? null
+              : IconButton(
+                  tooltip: context.translate('BMS commands', 'Perintah BMS'),
+                  onPressed: onCommands,
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(
+                    Icons.lock_outline_rounded,
+                    color: AppColors.accent,
+                    size: 26,
+                  ),
+                ),
         ),
       ],
     );
@@ -400,10 +497,12 @@ class _BatteryTypePresetCard extends StatelessWidget {
   const _BatteryTypePresetCard({
     required this.selectedType,
     required this.onSelected,
+    required this.onApplyPreset,
   });
 
   final BmsBatteryType? selectedType;
   final ValueChanged<BmsBatteryType> onSelected;
+  final VoidCallback onApplyPreset;
 
   @override
   Widget build(BuildContext context) {
@@ -435,8 +534,8 @@ class _BatteryTypePresetCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             context.translate(
-              'Choose a chemistry preset, then review the values before saving.',
-              'Pilih preset kimia, lalu periksa nilainya sebelum menyimpan.',
+              'Select the battery chemistry used for validation. Applying its preset is optional.',
+              'Pilih kimia baterai untuk validasi. Penerapan preset bersifat opsional.',
             ),
             style: const TextStyle(color: Color(0xFF666666), fontSize: 12),
           ),
@@ -481,6 +580,17 @@ class _BatteryTypePresetCard extends StatelessWidget {
                 color: AppColors.text,
                 fontSize: 11,
                 height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onApplyPreset,
+                icon: const Icon(Icons.auto_fix_high_rounded, size: 18),
+                label: Text(
+                  context.translate('Apply preset', 'Terapkan preset'),
+                ),
               ),
             ),
           ],

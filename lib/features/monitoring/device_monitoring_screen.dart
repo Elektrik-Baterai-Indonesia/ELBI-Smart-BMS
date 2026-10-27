@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/localization/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
+import '../commands/bms_command.dart';
 import '../devices/saved_device.dart';
 import '../settings/app_settings.dart';
 import '../settings/app_settings_controller.dart';
@@ -36,6 +37,9 @@ class DeviceMonitoringScreen extends StatefulWidget {
 class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
   static const _kConnectionTimeout = Duration(seconds: 12);
   static const _kDisconnectDelay = Duration(milliseconds: 300);
+  static const _kResetRestartDelay = Duration(seconds: 3);
+  static const _kReconnectRetryDelay = Duration(seconds: 2);
+  static const _kReconnectAttempts = 5;
   static const _kDemoInterval = Duration(seconds: 2);
   static const _kTelemetryBufferSize = 32768;
   static const _kLowBatteryThreshold = 0.15;
@@ -115,6 +119,9 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
   bool _allowPop = false;
   int _connectionGeneration = 0;
   String? _connectionError;
+  int _reconnectGeneration = 0;
+  String? _reconnectMessage;
+  Completer<bool>? _connectionOutcome;
   BleDebugController? _debugController;
   BmsCsvLogger? _csvLogger;
   BmsSettings? _deviceSettings;
@@ -140,6 +147,8 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
     _isClosing = true;
     _connectionRequested = false;
     _connectionGeneration++;
+    _reconnectGeneration++;
+    _completeConnectionOutcome(false);
     _demoTimer?.cancel();
     unawaited(_finishDataRecording(notify: false));
     _debugController?.dispose();
@@ -244,7 +253,7 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
                         deviceId: widget.device.id,
                         bleStatus: _bleStatus,
                         connectionState: _connectionState,
-                        errorMessage: _connectionError,
+                        errorMessage: _reconnectMessage ?? _connectionError,
                         onRetry: _prepareConnection,
                         onDisconnect: _disconnect,
                       ),
@@ -304,13 +313,14 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
     );
   }
 
-  Future<void> _showSettingsMessage() {
-    return Navigator.of(context).push<void>(
+  Future<void> _showSettingsMessage() async {
+    final sentCommand = await Navigator.of(context).push<BmsCommand>(
       MaterialPageRoute(
         builder: (_) => BmsSettingsScreen(
           device: widget.device,
           demoMode: widget.demoMode,
           initialSettings: _deviceSettings,
+          initialBatteryType: widget.demoMode ? BmsBatteryType.nmc : null,
           onSendParameters:
               !widget.demoMode &&
                   _connectionState == DeviceConnectionState.connected
@@ -319,6 +329,65 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
         ),
       ),
     );
+    if (sentCommand == null || widget.demoMode || !mounted) return;
+    await _reconnectAfterCommand();
+  }
+
+  /// The BMS restarts after a reset command, so drop the link, wait for it
+  /// to come back, and reconnect. Disconnect or leaving the page cancels this.
+  Future<void> _reconnectAfterCommand() async {
+    await _disconnect();
+    final generation = ++_reconnectGeneration;
+    bool cancelled() =>
+        !mounted || _isClosing || generation != _reconnectGeneration;
+
+    for (var attempt = 1; attempt <= _kReconnectAttempts; attempt++) {
+      if (cancelled()) return;
+      setState(() {
+        _reconnectMessage = context.translate(
+          'Waiting for the BMS to restart… reconnecting '
+              '(attempt $attempt of $_kReconnectAttempts).',
+          'Menunggu BMS memulai ulang… menghubungkan kembali '
+              '(percobaan $attempt dari $_kReconnectAttempts).',
+        );
+      });
+      await Future<void>.delayed(
+        attempt == 1 ? _kResetRestartDelay : _kReconnectRetryDelay,
+      );
+      if (cancelled()) return;
+
+      var connected = _connectionState == DeviceConnectionState.connected;
+      if (!connected) {
+        final outcome = _connectionOutcome = Completer<bool>();
+        await _prepareConnection();
+        connected = _connectionAttemptActive
+            ? await outcome.future.timeout(
+                _kConnectionTimeout + const Duration(seconds: 3),
+                onTimeout: () => false,
+              )
+            : _connectionState == DeviceConnectionState.connected;
+      }
+      if (cancelled()) return;
+      if (connected) {
+        setState(() => _reconnectMessage = null);
+        return;
+      }
+    }
+
+    if (cancelled()) return;
+    setState(() {
+      _reconnectMessage = null;
+      _connectionError = context.translate(
+        'Could not reconnect after the reset. Tap Retry to try again.',
+        'Tidak dapat terhubung kembali setelah reset. Ketuk Coba lagi.',
+      );
+    });
+  }
+
+  void _completeConnectionOutcome(bool connected) {
+    final outcome = _connectionOutcome;
+    _connectionOutcome = null;
+    if (outcome != null && !outcome.isCompleted) outcome.complete(connected);
   }
 
   void _initializeBluetoothConnection() {
@@ -401,6 +470,7 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
             if (update.connectionState == DeviceConnectionState.connected) {
               _startDataRecording();
               _startDebugCapture();
+              _completeConnectionOutcome(true);
             }
             setState(() {
               _connectionState = update.connectionState;
@@ -413,7 +483,8 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
             });
 
             if (update.connectionState == DeviceConnectionState.disconnected) {
-              _debugController?.stop();
+              _completeConnectionOutcome(false);
+              unawaited(_stopDebugCapture());
               unawaited(_finishDataRecording());
               _connectionAttemptActive = false;
               _connectionRequested = false;
@@ -432,11 +503,23 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
             });
             _connectionAttemptActive = false;
             _connectionRequested = false;
+            _completeConnectionOutcome(false);
+            unawaited(_stopDebugCapture());
             unawaited(_finishDataRecording());
           },
           onDone: () {
             if (generation != _connectionGeneration) return;
+            _completeConnectionOutcome(false);
             _connectionAttemptActive = false;
+            _connectionRequested = false;
+            if (mounted &&
+                _connectionState != DeviceConnectionState.disconnected) {
+              setState(() {
+                _connectionState = DeviceConnectionState.disconnected;
+              });
+            }
+            unawaited(_stopDebugCapture());
+            unawaited(_finishDataRecording());
           },
         );
   }
@@ -445,14 +528,17 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
     if (_isClosing) return;
     _connectionRequested = false;
     _connectionGeneration++;
+    _reconnectGeneration++;
+    _completeConnectionOutcome(false);
     if (mounted) {
       setState(() {
         _connectionState = DeviceConnectionState.disconnecting;
         _connectionError = null;
+        _reconnectMessage = null;
       });
     }
 
-    await _debugController?.stop();
+    await _stopDebugCapture();
     await _finishDataRecording();
     await Future<void>.delayed(_kDisconnectDelay);
     await _connectionSubscription?.cancel();
@@ -474,9 +560,11 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
     _isClosing = true;
     _connectionRequested = false;
     _connectionGeneration++;
+    _reconnectGeneration++;
+    _completeConnectionOutcome(false);
     _demoTimer?.cancel();
 
-    await _debugController?.stop();
+    await _stopDebugCapture();
     await _finishDataRecording();
     await Future<void>.delayed(_kDisconnectDelay);
     await _connectionSubscription?.cancel();
@@ -531,6 +619,18 @@ class _DeviceMonitoringScreenState extends State<DeviceMonitoringScreen> {
     controller.removeListener(_handleDebugPackets);
     controller.addListener(_handleDebugPackets);
     controller.start();
+  }
+
+  Future<void> _stopDebugCapture() async {
+    final controller = _debugController;
+    if (controller == null) return;
+    _debugController = null;
+    controller.removeListener(_handleDebugPackets);
+    _lastTelemetryMessage = null;
+    _telemetryBuffer = '';
+    _telemetryCharacteristicId = null;
+    await controller.stop();
+    controller.dispose();
   }
 
   void _handleDebugPackets() {

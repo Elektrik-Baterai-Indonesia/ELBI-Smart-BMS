@@ -106,8 +106,8 @@ BmsSettingValueLimit? bmsSettingValueLimitFor(
   }
   if (key == BmsSettingKey.balancingMinimum) {
     return const BmsSettingValueLimit(
-      minimumExclusive: 0,
-      maximumExclusive: 2800,
+      minimumExclusive: 2799,
+      maximumExclusive: 3651,
     );
   }
   if (key == BmsSettingKey.balancingDifferent ||
@@ -121,8 +121,8 @@ BmsSettingValueLimit? bmsSettingValueLimitFor(
   if (key == BmsSettingKey.underVoltageProtection) {
     return switch (batteryType) {
       BmsBatteryType.lfp => const BmsSettingValueLimit(
-        minimumExclusive: 2800,
-        maximumExclusive: 3650,
+        minimumExclusive: 2699,
+        maximumExclusive: 3701,
       ),
       BmsBatteryType.nmc => const BmsSettingValueLimit(
         minimumExclusive: 2500,
@@ -138,8 +138,8 @@ BmsSettingValueLimit? bmsSettingValueLimitFor(
   if (key == BmsSettingKey.overVoltageProtection) {
     return switch (batteryType) {
       BmsBatteryType.lfp => const BmsSettingValueLimit(
-        minimumExclusive: 2800,
-        maximumExclusive: 3650,
+        minimumExclusive: 2699,
+        maximumExclusive: 3701,
       ),
       BmsBatteryType.nmc => const BmsSettingValueLimit(
         minimumExclusive: 3800,
@@ -420,16 +420,6 @@ class BmsSettings {
     return BmsSettings({...values, ...batteryType.presetValues});
   }
 
-  BmsBatteryType? get matchingBatteryType {
-    for (final batteryType in BmsBatteryType.values) {
-      final matches = batteryType.presetValues.entries.every(
-        (entry) => valueFor(entry.key) == entry.value,
-      );
-      if (matches) return batteryType;
-    }
-    return null;
-  }
-
   Map<String, double> toJson() {
     return {for (final entry in values.entries) entry.key.name: entry.value};
   }
@@ -464,4 +454,34 @@ class BmsSettings {
   }
 
   String toBluetoothPayload() => jsonEncode(toBluetoothJson());
+}
+
+class BmsDeviceConfiguration {
+  const BmsDeviceConfiguration({required this.settings, this.batteryType});
+
+  factory BmsDeviceConfiguration.fromJson(Map<String, dynamic> json) {
+    final settingsJson = json['settings'];
+    if (settingsJson is! Map) {
+      throw const FormatException('BMS settings are missing.');
+    }
+
+    final batteryTypeName = json['batteryType'];
+    final batteryType = batteryTypeName is String
+        ? BmsBatteryType.values
+              .where((candidate) => candidate.name == batteryTypeName)
+              .firstOrNull
+        : null;
+
+    return BmsDeviceConfiguration(
+      settings: BmsSettings.fromJson(Map<String, dynamic>.from(settingsJson)),
+      batteryType: batteryType,
+    );
+  }
+
+  final BmsSettings settings;
+  final BmsBatteryType? batteryType;
+
+  Map<String, Object?> toJson() {
+    return {'batteryType': batteryType?.name, 'settings': settings.toJson()};
+  }
 }

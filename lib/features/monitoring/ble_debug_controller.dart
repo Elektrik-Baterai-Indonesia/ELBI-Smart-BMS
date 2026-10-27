@@ -92,6 +92,7 @@ class BleDebugController extends ChangeNotifier {
   int _serviceCount = 0;
   int _characteristicCount = 0;
   int _negotiatedMtu = _defaultMtu;
+  int _lifecycleGeneration = 0;
   String? _errorMessage;
   Completer<void>? _discoveryCompleter;
 
@@ -106,9 +107,11 @@ class BleDebugController extends ChangeNotifier {
     if (_disposed || _servicesDiscovered) return;
     if (_isDiscovering) {
       await _discoveryCompleter?.future;
+      if (!_disposed && !_servicesDiscovered) await start();
       return;
     }
 
+    final generation = _lifecycleGeneration;
     _isDiscovering = true;
     _discoveryCompleter = Completer<void>();
     _errorMessage = null;
@@ -117,9 +120,10 @@ class BleDebugController extends ChangeNotifier {
     try {
       await _ble.discoverAllServices(_deviceId);
       final services = await _ble.getDiscoveredServices(_deviceId);
-      if (_disposed) return;
+      if (_disposed || generation != _lifecycleGeneration) return;
 
       _negotiatedMtu = await _negotiateMtu();
+      if (_disposed || generation != _lifecycleGeneration) return;
       _writableCharacteristics.clear();
 
       Service? uartService;
@@ -170,6 +174,7 @@ class BleDebugController extends ChangeNotifier {
           // FFE2 is primarily a notification channel and may reject reads.
         }
       }
+      if (_disposed || generation != _lifecycleGeneration) return;
 
       final subscription = notifyCharacteristic.subscribe().listen(
         (value) => _addPacket(
@@ -185,6 +190,10 @@ class BleDebugController extends ChangeNotifier {
           notifyListeners();
         },
       );
+      if (_disposed || generation != _lifecycleGeneration) {
+        await subscription.cancel();
+        return;
+      }
       _subscriptions.add(subscription);
 
       _isCapturing = _subscriptions.isNotEmpty;
@@ -256,12 +265,18 @@ class BleDebugController extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    _lifecycleGeneration++;
     final subscriptions = [..._subscriptions];
     _subscriptions.clear();
+    _isCapturing = false;
+    _servicesDiscovered = false;
+    _writableCharacteristics.clear();
+    _serviceCount = 0;
+    _characteristicCount = 0;
+    _negotiatedMtu = _defaultMtu;
     for (final subscription in subscriptions) {
       await subscription.cancel();
     }
-    _isCapturing = false;
     if (!_disposed) notifyListeners();
   }
 
@@ -295,6 +310,7 @@ class BleDebugController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _lifecycleGeneration++;
     for (final subscription in _subscriptions) {
       subscription.cancel();
     }

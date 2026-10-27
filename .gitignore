@@ -63,9 +63,13 @@ Thumbs.db
 # Environment
 .env
 .env.*
+!.env.example
 *.secrets
 secrets.properties
 credentials.json
 service-account*.json
 google-services.json
 GoogleService-Info.plist
+
+# Graphify
+graphify-out/

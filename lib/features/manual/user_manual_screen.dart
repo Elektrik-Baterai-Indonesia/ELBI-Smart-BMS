@@ -212,13 +212,15 @@ class UserManualScreen extends StatelessWidget {
                         ),
                         description: context.translate(
                           'Tap the gear icon on the monitoring page, then '
-                              'select LFP, NMC, or LTO. The preset fills the '
-                              'supported protection, delay, temperature, '
-                              'balancing, and sleep values.',
+                              'select LFP, NMC, or LTO. Selecting the chemistry '
+                              'does not change the current parameters. Use '
+                              'Apply preset and confirm only when you want to '
+                              'replace the supported preset values.',
                           'Ketuk ikon roda gigi pada halaman pemantauan, lalu '
-                              'pilih LFP, NMC, atau LTO. Preset akan mengisi '
-                              'nilai proteksi, jeda, suhu, penyeimbangan, dan '
-                              'waktu tidur yang didukung.',
+                              'pilih LFP, NMC, atau LTO. Memilih jenis kimia '
+                              'tidak mengubah parameter saat ini. Gunakan '
+                              'Terapkan preset dan konfirmasikan hanya jika '
+                              'ingin mengganti nilai preset yang didukung.',
                         ),
                       ),
                       _ManualStep(
